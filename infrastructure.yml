@@ -1,21 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Asset Proxy Infrastructure - S3 private + Lambda container + Lambda Function URL + CloudFront Distribution + IAM Roles.
+Description: Asset Proxy Infrastructure - S3 + Lambda + CloudFront
 
 Parameters:
-  GitHubOrg:
-    Type: String
-    Default: adirnago
-    Description: GitHub organisation or username that owns the repo
-
-  GitHubRepo:
-    Type: String
-    Default: zota_task
-    Description: GitHub repository name (without the org prefix)
-
   ECRImageURI:
     Type: String
     Default: public.ecr.aws/lambda/provided:al2023
-    Description: Full ECR image URI for the Lambda function.
+    Description: ECR image URI for the Lambda function.
 
 Resources:
 
@@ -59,69 +49,6 @@ Resources:
                   - s3:HeadObject
                 Resource: !Sub 'arn:aws:s3:::asset-proxy-store-${AWS::AccountId}/*'
 
-  GitHubActionsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: github-actions-asset-proxy
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action: sts:AssumeRoleWithWebIdentity
-            Principal:
-              Federated: !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
-            Condition:
-              StringEquals:
-                'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com'
-              StringLike:
-                'token.actions.githubusercontent.com:sub':
-                  - !Sub 'repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/*'
-      Policies:
-        - PolicyName: ECRPush
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: ecr:GetAuthorizationToken
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - ecr:BatchCheckLayerAvailability
-                  - ecr:GetDownloadUrlForLayer
-                  - ecr:BatchGetImage
-                  - ecr:PutImage
-                  - ecr:InitiateLayerUpload
-                  - ecr:UploadLayerPart
-                  - ecr:CompleteLayerUpload
-                Resource: !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/asset-proxy'
-        - PolicyName: LambdaUpdate
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - lambda:UpdateFunctionCode
-                  - lambda:GetFunction
-                  - lambda:GetFunctionConfiguration
-                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:asset-proxy-*'
-        - PolicyName: CloudFormationDeploy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - cloudformation:CreateStack
-                  - cloudformation:UpdateStack
-                  - cloudformation:CreateChangeSet
-                  - cloudformation:ExecuteChangeSet
-                  - cloudformation:DeleteChangeSet
-                  - cloudformation:DescribeStacks
-                  - cloudformation:DescribeStackEvents
-                  - cloudformation:GetTemplate
-                  - cloudformation:GetTemplateSummary
-                  - cloudformation:ValidateTemplate
-                Resource: '*'
-
   AssetProxyLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -161,7 +88,7 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Comment: Asset Proxy CDN - CloudFront Distribution
+        Comment: Asset Proxy CDN
         Enabled: true
         HttpVersion: http2
         DefaultCacheBehavior:
@@ -195,14 +122,6 @@ Outputs:
   LambdaFunctionArn:
     Description: Lambda function ARN
     Value: !GetAtt AssetProxyLambda.Arn
-
-  LambdaFunctionName:
-    Description: Lambda function name
-    Value: !Ref AssetProxyLambda
-
-  GitHubActionsRoleArn:
-    Description: Paste this ARN as the AWS_ROLE_ARN secret in your GitHub repo settings.
-    Value: !GetAtt GitHubActionsRole.Arn
 
   CloudFrontURL:
     Description: Public CloudFront URL
