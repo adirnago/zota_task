@@ -1,3 +1,4 @@
+#
 # Stage 1: Build
 FROM --platform=linux/arm64 golang:1.22-alpine AS builder
 
