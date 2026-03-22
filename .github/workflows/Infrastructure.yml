@@ -1,11 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Asset Proxy Infrastructure — S3 (private) + Lambda (container) +
-  Lambda Function URL + CloudFront Distribution + IAM Roles.
+Description: Asset Proxy Infrastructure - S3 private + Lambda container + Lambda Function URL + CloudFront Distribution + IAM Roles.
 
-# ---------------------------------------------------------------------------
-# Parameters
-# ---------------------------------------------------------------------------
 Parameters:
   GitHubOrg:
     Type: String
@@ -20,24 +15,14 @@ Parameters:
   ECRImageURI:
     Type: String
     Default: public.ecr.aws/lambda/provided:al2023
-    Description: >
-      Full ECR image URI for the Lambda function.
-      Use the placeholder on first deploy, then update with the real image
-      once GitHub Actions has pushed it.
+    Description: Full ECR image URI for the Lambda function.
 
-# ---------------------------------------------------------------------------
-# Resources
-# ---------------------------------------------------------------------------
 Resources:
 
-  # -------------------------------------------------------------------------
-  # S3 — private asset bucket
-  # -------------------------------------------------------------------------
   AssetBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'asset-proxy-assets-${AWS::AccountId}'
-      AccessControl: Private
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -50,13 +35,10 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
 
-  # -------------------------------------------------------------------------
-  # IAM — Lambda execution role (read from S3)
-  # -------------------------------------------------------------------------
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: asset-proxy-lambda-role
+      RoleName: github-actions-asset-proxy-lambda
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -77,9 +59,6 @@ Resources:
                   - s3:HeadObject
                 Resource: !Sub 'arn:aws:s3:::asset-proxy-assets-${AWS::AccountId}/*'
 
-  # -------------------------------------------------------------------------
-  # IAM — GitHub Actions OIDC role (ECR push + Lambda update)
-  # -------------------------------------------------------------------------
   GitHubActionsRole:
     Type: AWS::IAM::Role
     Properties:
@@ -123,15 +102,28 @@ Resources:
                 Action:
                   - lambda:UpdateFunctionCode
                   - lambda:GetFunction
-                Resource: !GetAtt AssetProxyLambda.Arn
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:asset-proxy-*'
+        - PolicyName: CloudFormationDeploy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:GetTemplate
+                  - cloudformation:ValidateTemplate
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/asset-proxy/*'
 
-  # -------------------------------------------------------------------------
-  # Lambda — container function
-  # -------------------------------------------------------------------------
   AssetProxyLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: asset-proxy
+      FunctionName: asset-proxy-handler
       PackageType: Image
       Code:
         ImageUri: !Ref ECRImageURI
@@ -144,9 +136,6 @@ Resources:
         Variables:
           BUCKET_NAME: !Sub 'asset-proxy-assets-${AWS::AccountId}'
 
-  # -------------------------------------------------------------------------
-  # Lambda Function URL — public, no auth (CloudFront sits in front)
-  # -------------------------------------------------------------------------
   AssetProxyFunctionUrl:
     Type: AWS::Lambda::Url
     Properties:
@@ -158,7 +147,6 @@ Resources:
         AllowMethods:
           - GET
 
-  # Allow public invocation via the Function URL
   LambdaFunctionUrlAllowPublicAccess:
     Type: AWS::Lambda::Permission
     Properties:
@@ -167,21 +155,18 @@ Resources:
       Principal: '*'
       FunctionUrlAuthType: NONE
 
-  # -------------------------------------------------------------------------
-  # CloudFront — CDN in front of the Lambda Function URL
-  # -------------------------------------------------------------------------
   AssetProxyDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Comment: Asset Proxy CDN
+        Comment: Asset Proxy CDN - CloudFront Distribution
         Enabled: true
         HttpVersion: http2
         DefaultCacheBehavior:
           TargetOriginId: LambdaFunctionUrl
           ViewerProtocolPolicy: redirect-to-https
-          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled (managed)
-          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # AllViewerExceptHostHeader (managed)
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
           AllowedMethods:
             - GET
             - HEAD
@@ -190,7 +175,6 @@ Resources:
             - HEAD
         Origins:
           - Id: LambdaFunctionUrl
-            # CloudFront needs just the hostname, not the https:// prefix
             DomainName: !Select
               - 2
               - !Split ['/', !GetAtt AssetProxyFunctionUrl.FunctionUrl]
@@ -199,18 +183,15 @@ Resources:
               OriginProtocolPolicy: https-only
               OriginSSLProtocols:
                 - TLSv1.2
-        PriceClass: PriceClass_100  # US + Europe edge locations
+        PriceClass: PriceClass_100
 
-# ---------------------------------------------------------------------------
-# Outputs
-# ---------------------------------------------------------------------------
 Outputs:
   AssetBucketName:
     Description: Name of the private S3 bucket
     Value: !Ref AssetBucket
 
   LambdaFunctionArn:
-    Description: Lambda function ARN (used by the deploy workflow)
+    Description: Lambda function ARN
     Value: !GetAtt AssetProxyLambda.Arn
 
   LambdaFunctionName:
@@ -218,14 +199,13 @@ Outputs:
     Value: !Ref AssetProxyLambda
 
   GitHubActionsRoleArn:
-    Description: >
-      Paste this ARN as the AWS_ROLE_ARN secret in your GitHub repo settings.
+    Description: Paste this ARN as the AWS_ROLE_ARN secret in your GitHub repo settings.
     Value: !GetAtt GitHubActionsRole.Arn
 
   CloudFrontURL:
-    Description: Public CloudFront URL — use this to test asset delivery
+    Description: Public CloudFront URL
     Value: !Sub 'https://${AssetProxyDistribution.DomainName}'
 
   LambdaFunctionURL:
-    Description: Direct Lambda Function URL (keep private — access via CloudFront)
+    Description: Direct Lambda Function URL
     Value: !GetAtt AssetProxyFunctionUrl.FunctionUrl
