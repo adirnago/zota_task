@@ -87,5 +87,4 @@ jobs:
             --region $AWS_REGION \
             --no-fail-on-empty-changeset \
             --parameter-overrides \
-              ECRImageURI=${{ needs.build.outputs.image_uri }} \
-              GitHubRepo=zota_task
+              ECRImageURI=${{ needs.build.outputs.image_uri }}
