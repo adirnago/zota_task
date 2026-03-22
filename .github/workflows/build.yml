@@ -37,26 +37,12 @@ jobs:
       - name: Log in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set up QEMU for arm64 emulation
-        uses: docker/setup-qemu-action@v3
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
         with:
-          platforms: arm64
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        run: |
-          docker build \
-            --platform linux/arm64 \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }} \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-            .
-
-      - name: Push Docker image to ECR
-        run: |
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
       - name: Set image URI output
         id: set-output
@@ -88,3 +74,10 @@ jobs:
             --no-fail-on-empty-changeset \
             --parameter-overrides \
               ECRImageURI=${{ needs.build.outputs.image_uri }}
+
+      - name: Update Lambda function image
+        run: |
+          aws lambda update-function-code \
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --image-uri ${{ needs.build.outputs.image_uri }} \
+            --region $AWS_REGION

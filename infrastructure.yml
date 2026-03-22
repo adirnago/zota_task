@@ -4,7 +4,6 @@ Description: Asset Proxy Infrastructure - S3 + Lambda + CloudFront
 Parameters:
   ECRImageURI:
     Type: String
-    Default: public.ecr.aws/lambda/provided:al2023
     Description: ECR image URI for the Lambda function.
 
 Resources:
@@ -47,6 +46,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:HeadObject
+                  - s3:ListBucket
                 Resource: !Sub 'arn:aws:s3:::asset-proxy-store-${AWS::AccountId}/*'
 
   AssetProxyLambda:
@@ -69,7 +69,7 @@ Resources:
     Type: AWS::Lambda::Url
     Properties:
       TargetFunctionArn: !GetAtt AssetProxyLambda.Arn
-      AuthType: NONE
+      AuthType: AWS_IAM
       Cors:
         AllowOrigins:
           - '*'
@@ -78,11 +78,22 @@ Resources:
 
   LambdaFunctionUrlAllowPublicAccess:
     Type: AWS::Lambda::Permission
+    DependsOn: AssetProxyDistribution
     Properties:
       FunctionName: !GetAtt AssetProxyLambda.Arn
       Action: lambda:InvokeFunctionUrl
-      Principal: '*'
-      FunctionUrlAuthType: NONE
+      Principal: cloudfront.amazonaws.com
+      SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${AssetProxyDistribution}'
+      FunctionUrlAuthType: AWS_IAM
+
+  LambdaOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: LambdaOAC
+        OriginAccessControlOriginType: lambda
+        SigningBehavior: always
+        SigningProtocol: sigv4
 
   AssetProxyDistribution:
     Type: AWS::CloudFront::Distribution
@@ -107,6 +118,7 @@ Resources:
             DomainName: !Select
               - 2
               - !Split ['/', !GetAtt AssetProxyFunctionUrl.FunctionUrl]
+            OriginAccessControlId: !GetAtt LambdaOriginAccessControl.Id
             CustomOriginConfig:
               HTTPSPort: 443
               OriginProtocolPolicy: https-only
