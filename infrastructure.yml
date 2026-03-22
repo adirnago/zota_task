@@ -9,7 +9,7 @@ Parameters:
 
   GitHubRepo:
     Type: String
-    Default: devops-secops-task
+    Default: zota_task
     Description: GitHub repository name (without the org prefix)
 
   ECRImageURI:
@@ -22,7 +22,7 @@ Resources:
   AssetBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'asset-proxy-assets-${AWS::AccountId}'
+      BucketName: !Sub 'asset-proxy-store-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -57,7 +57,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:HeadObject
-                Resource: !Sub 'arn:aws:s3:::asset-proxy-assets-${AWS::AccountId}/*'
+                Resource: !Sub 'arn:aws:s3:::asset-proxy-store-${AWS::AccountId}/*'
 
   GitHubActionsRole:
     Type: AWS::IAM::Role
@@ -102,6 +102,7 @@ Resources:
                 Action:
                   - lambda:UpdateFunctionCode
                   - lambda:GetFunction
+                  - lambda:GetFunctionConfiguration
                 Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:asset-proxy-*'
         - PolicyName: CloudFormationDeploy
           PolicyDocument:
@@ -117,8 +118,9 @@ Resources:
                   - cloudformation:DescribeStacks
                   - cloudformation:DescribeStackEvents
                   - cloudformation:GetTemplate
+                  - cloudformation:GetTemplateSummary
                   - cloudformation:ValidateTemplate
-                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/asset-proxy/*'
+                Resource: '*'
 
   AssetProxyLambda:
     Type: AWS::Lambda::Function
@@ -134,7 +136,7 @@ Resources:
       Timeout: 30
       Environment:
         Variables:
-          BUCKET_NAME: !Sub 'asset-proxy-assets-${AWS::AccountId}'
+          BUCKET_NAME: !Sub 'asset-proxy-store-${AWS::AccountId}'
 
   AssetProxyFunctionUrl:
     Type: AWS::Lambda::Url
