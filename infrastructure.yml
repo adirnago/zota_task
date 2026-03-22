@@ -81,12 +81,11 @@ Resources:
 
   LambdaFunctionUrlAllowPublicAccess:
     Type: AWS::Lambda::Permission
-    DependsOn: AssetProxyDistribution
     Properties:
       FunctionName: !GetAtt AssetProxyLambda.Arn
       Action: lambda:InvokeFunctionUrl
       Principal: cloudfront.amazonaws.com
-      SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${AssetProxyDistribution}'
+      SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/*'
       FunctionUrlAuthType: AWS_IAM
 
   LambdaOriginAccessControl:
