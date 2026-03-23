@@ -72,7 +72,7 @@ Resources:
     Type: AWS::Lambda::Url
     Properties:
       TargetFunctionArn: !GetAtt AssetProxyLambda.Arn
-      AuthType: AWS_IAM
+      AuthType: NONE
       Cors:
         AllowOrigins:
           - '*'
@@ -126,7 +126,7 @@ Resources:
       Action: lambda:InvokeFunctionUrl
       Principal: cloudfront.amazonaws.com
       SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${AssetProxyDistribution}'
-      FunctionUrlAuthType: AWS_IAM
+      FunctionUrlAuthType: NONE
 
 Outputs:
   AssetBucketName:
