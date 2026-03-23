@@ -95,10 +95,3 @@ After deployment, access via:
 - CloudFront improves latency and reduces Lambda invocations  
 
 ---
-
-## 📬 Submission
-
-Please include:
-
-- GitHub repository link  
-- Working CloudFront URL  
