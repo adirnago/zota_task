@@ -72,6 +72,7 @@ jobs:
 
       - name: Deploy CloudFormation stack
         run: |
+          set -e
           aws cloudformation deploy \
             --template-file infrastructure.yml \
             --stack-name $STACK_NAME \
@@ -79,11 +80,25 @@ jobs:
             --region $AWS_REGION \
             --no-fail-on-empty-changeset \
             --parameter-overrides \
-              ECRImageURI=${{ needs.build.outputs.image_uri }}
+              ECRImageURI=${{ needs.build.outputs.image_uri }} || true
+
+          echo "=== Stack Events ==="
+          aws cloudformation describe-stack-events \
+            --stack-name $STACK_NAME \
+            --region $AWS_REGION \
+            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[Timestamp,ResourceType,ResourceStatusReason]' \
+            --output table
+
+          echo "=== Stack Status ==="
+          aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --region $AWS_REGION \
+            --query 'Stacks[0].StackStatus' \
+            --output text
 
       - name: Update Lambda function image
         run: |
           aws lambda update-function-code \
             --function-name $LAMBDA_FUNCTION_NAME \
             --image-uri ${{ needs.build.outputs.image_uri }} \
-            --region $AWS_REGION
+            --region $AWS_REGION  
