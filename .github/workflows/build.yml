@@ -48,6 +48,7 @@ jobs:
         with:
           platforms: linux/arm64
           push: true
+          provenance: false
           tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
       - name: Set image URI output
